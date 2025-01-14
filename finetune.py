@@ -17,7 +17,7 @@ class FinetuneArguments:
     dataset_path: str = field(default="data/alpaca")
     model_path: str = field(default="output")
     lora_rank: int = field(default=8)
-    chatglm_path: str = field(default="model_path/chatglm")
+    chatglm_path: str = field(default="../chatglm-6b")
 
 
 class CastOutputToFloat(nn.Sequential):
@@ -32,12 +32,18 @@ class DataCollator:
     def __call__(self, features: list) -> dict:
         len_ids = [len(feature["input_ids"]) for feature in features]
         longest = max(len_ids)
-        input_ids = []
+        input_ids = []  # 存储填充后的 输入序列 和 标签
         labels_list = []
+        # 按照序列长度从长到短排序, 减少填充值(padding)的计算开销, 提高训练效率
         for ids_l, feature in sorted(zip(len_ids, features), key=lambda x: -x[0]):
             ids = feature["input_ids"]
             seq_len = feature["seq_len"]
-
+            
+            '''标签的生成逻辑：
+            前 seq_len-1 的部分用 -100 填充，表示这些部分的标签不参与损失计算。
+            从 seq_len-1 开始，保留有效的输入序列。
+            填充到最长序列长度，填充部分同样用 -100 标记。
+            '''
             labels = (
                 [-100] * (seq_len - 1)
                 + ids[(seq_len - 1) :]
